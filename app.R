@@ -52,6 +52,7 @@ ui <- fluidPage(
                 selectInput(
                     inputId = "DESeq2Column",
                     label = "Statistic:",
+                    ## TODO: if pvalue: do not split in quadrants, do whole
                     choices = list( "log Fold Change (column named `log2FoldChange`)" = "log2FoldChange",
                                    "Statistic (column named `stat`)" = "stat",
                                    "P-value (column named `pvalue`)" = "pvalue"),
@@ -155,8 +156,8 @@ server <- function(input, output, session)
             req(input$DESeq2A)
             req(input$DESeq2B)
 
-            print(input$DESeq2A)
-            print(input$DESeq2B)
+            ## print(input$DESeq2A)
+            ## print(input$DESeq2B)
 
             DESeq2A <- fread(file=input$DESeq2A$datapath)
             DESeq2A <- DESeq2A[,c(1, grep(input$DESeq2Column, colnames(DESeq2A))), with=FALSE]
