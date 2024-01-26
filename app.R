@@ -147,8 +147,27 @@ server <- function(input, output, session)
         } else if ("file" == input$DataSource)
         {
             req(input$File)
-            dt <- fread(input$File$datapath)
+            dt <- fread(file=input$File$datapath)
             ## TODO: check the columns
+            dt
+        } else if ("DESeq2" == input$DataSource)
+        {
+            req(input$DESeq2A)
+            req(input$DESeq2B)
+
+            print(input$DESeq2A)
+            print(input$DESeq2B)
+
+            DESeq2A <- fread(file=input$DESeq2A$datapath)
+            DESeq2A <- DESeq2A[,c(1, grep(input$DESeq2Column, colnames(DESeq2A))), with=FALSE]
+            colnames(DESeq2A) <- c("id", "a")
+            
+            DESeq2B <- fread(file=input$DESeq2B$datapath)
+            DESeq2B <- DESeq2B[,c(1, grep(input$DESeq2Column, colnames(DESeq2B))), with=FALSE]
+            colnames(DESeq2B) <- c("id", "b")
+            
+            dt <- merge(DESeq2A, DESeq2B, by="id")
+            
             dt
         } else
             req(FALSE)
@@ -179,7 +198,8 @@ server <- function(input, output, session)
     output$Results <- renderTable({
         dt <- genDT()
         qd <- quad()
- 
+
+        ## print(names(qd$downdown))
         df <- t(sapply(names(qd),
                        function(dir)
                        {
