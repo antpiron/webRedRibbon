@@ -130,21 +130,30 @@ gen.dt <- function (n)
 server <- function(input, output, session)
 {
     dpi <- 96 ## reactive({ as.integer(input$dpi) } )
-    width <- reactive({ as.integer(input$Width) } )
+
+    width <- debounce(reactive({ as.integer(input$Width) } ), 1000)
     height <- reactive({ as.integer(768 * width() / 1024)} )
     size_factor <- reactive({
         width() / 1024
     })
 
-    base_size <- reactive({ max(5, as.integer(input$FontSize * size_factor() )) })
+
+    base_size <- debounce(reactive({ max(5, as.integer(input$FontSize * size_factor() )) }), 1000)
+
+    demo_n <- debounce( reactive({ as.integer(input$N)  }), 1000)
 
     ## repel_force  <- reactive({ as.integer(0.5 * sqrt(width()^2 + height()^2) * size_factor())  })
+
+    observe({
+      # periodically collect
+      invalidateLater(1000 * 30,session)
+      gc()
+    })
  
     genDT <- reactive({
         if ("demo" == input$DataSource)
         {
-            n <- as.integer(input$N)
-            gen.dt(n)
+            gen.dt(demo_n())
         } else if ("file" == input$DataSource)
         {
             req(input$File)
@@ -182,7 +191,7 @@ server <- function(input, output, session)
     })
 
     quad <- reactive({
-        print(input$Algorithm)
+        ## print(input$Algorithm)
         quadrants(rr(), algorithm=input$Algorithm, permutation=input$Permutation, whole=! input$Quadrants)
     })
 
