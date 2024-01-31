@@ -78,7 +78,23 @@ ui <- fluidPage(
                     width = NULL,
                     size = NULL
                 )),
-            
+
+            conditionalPanel(
+                condition = "input.Algorithm == 'classic'",
+               
+                numericInput(inputId = "classicM",
+                             label = "m:",
+                             value = 500,
+                             min = 1,
+                             step = 1),
+
+                numericInput(inputId = "classicN",
+                             label = "n:",
+                             value = 500,
+                             min = 1,
+                             step = 1),
+            ),
+
             div(title = "Compute the adjusted P-value. This can take some time to generate depending on the number of permutations. We advise to experiments first without permutation and once, you have a satifactory result to activate the option.",
                 checkboxInput(inputId = "Permutation", "Permute", value = FALSE, width = NULL)),
             checkboxInput(inputId = "Quadrants", "Split into quadrants", value = TRUE, width = NULL),
@@ -127,6 +143,28 @@ gen.dt <- function (n)
     return(df)
 }
 
+quadrantResults <- function (quad, dt)
+{
+    df <- t(sapply(names(quad),
+                   function(dir)
+                   {
+                       res <- c(dir,
+                                sapply(c("pvalue", "log_pvalue", "padj", "log_padj", "direction", "i", "j", "count"),
+                                       function (name)
+                                       {
+                                           if (name %in% names(quad[[dir]]))
+                                               quad[[dir]][[name]]
+                                           else
+                                               NA
+                                       }),
+                                str_wrap(paste(dt[quad[[dir]]$positions,]$id, sep = ",", collapse = ", "))
+                                )
+                   }))
+    colnames(df) <- c("Direction", "P-value", "-log P-value", "P-adjusted", "-log P-adjusted", "Enrichment direction", "i", "j", "Count", "IDs")
+    
+    return(df)
+}
+    
 server <- function(input, output, session)
 {
     dpi <- 96 ## reactive({ as.integer(input$dpi) } )
@@ -182,6 +220,15 @@ server <- function(input, output, session)
         } else
             req(FALSE)
     })
+
+    ## TODO: fix generate twice when data source change and classic algorithm selected
+    observeEvent(input$DataSource, {
+        dt <- genDT()
+        maxN <- nrow(dt)
+        sqrtMaxN <- as.integer(sqrt(maxN))
+        updateNumericInput(session, "classicM", max = maxN, value = sqrtMaxN)
+        updateNumericInput(session, "classicN", max = maxN, value = sqrtMaxN)
+    })
     
     rr <- reactive({
         dt <- genDT()
@@ -190,9 +237,25 @@ server <- function(input, output, session)
         rr
     })
 
+    quadClassic <- debounce(
+        reactive({
+            if ("classic" == input$Algorithm)
+                quadrants(rr(), m=input$classicM, n=input$classicN, algorithm="classic", permutation=input$Permutation, whole=! input$Quadrants)
+        }),
+        1000)
+
+    quadEA <- reactive({
+        if ("ea" == input$Algorithm)
+            quadrants(rr(), algorithm="ea", permutation=input$Permutation, whole=! input$Quadrants)
+    })
+    
     quad <- reactive({
-        ## print(input$Algorithm)
-        quadrants(rr(), algorithm=input$Algorithm, permutation=input$Permutation, whole=! input$Quadrants)
+        quadrants(rr(), m=input$classicM, n=input$classicN, algorithm=input$Algorithm, permutation=input$Permutation, whole=! input$Quadrants)
+        
+        ##if ("ea" == input$Algorithm)
+        ##    quadEA()
+        ##else if ("classic" == input$Algorithm)
+        ##    quadClassic()
     })
 
     output$ggRedRibbon <- renderPlot({
@@ -210,26 +273,7 @@ server <- function(input, output, session)
         qd <- quad()
 
         ## print(names(qd$downdown))
-        df <- t(sapply(names(qd),
-                       function(dir)
-                       {
-                           c(
-                               dir,
-                               qd[[dir]]$pvalue,
-                               str_wrap(paste(dt[qd[[dir]]$positions,]$id, sep = ",", collapse = ", "))
-                           )
-                       }))
-        colnames(df) <- c("Direction", "P-value", "IDs")
-        df
-        ## data.table(
-        ##     Direction=c("Down-Down", "Up-Up", "Down-Up", "Up-Down"),
-        ##     "- log P-value" = c( qd$downdown$pvalue, qd$upup$pvalue, qd$downup$pvalue, qd$updown$pvalue ),
-        ##     IDs=c(str_wrap(paste(dt[qd$downdown$positions,]$id, sep = ",", collapse = ", ")),
-        ##           str_wrap(paste(dt[qd$upup$positions,]$id, sep = ",", collapse = ", ")),
-        ##           str_wrap(paste(dt[qd$downup$positions,]$id, sep = ",", collapse = ", ")),
-        ##           str_wrap(paste(dt[qd$updown$positions,]$id, sep = ",", collapse = ", ")))
-        ## )
-        
+        quadrantResults(qd, dt)
     })
     
     output$table <- renderDataTable({
